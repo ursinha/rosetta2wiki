@@ -196,6 +196,8 @@ class Utils():
         self.reviewed_packages = PackagesList("pacotes_revisados").packages
         self.affected_packages = PackagesList("pacotes_afetados").packages
         self.all_packages = self.handle_rosetta_pages()
+        self.pending_list = [pkg for pkg in self.all_packages
+                if not (pkg.is_gnome or pkg.is_completed)]
 
     def is_gnome(self, package):
         return package in self.gnome_packages
@@ -204,7 +206,6 @@ class Utils():
         translation_page_root = ("https://translations.edge.launchpad.net/"
             "ubuntu/karmic/+lang/pt_BR/+index")
         url = "%s?start=%d&batch=%d" % (translation_page_root, start, batch)
-        print url
         urldata = urlopen(url)
         html = "".join(["%s" % line for line in urldata.readlines()])
         return BeautifulSoup(html)
@@ -220,7 +221,7 @@ class Utils():
         batch_size = 50
         timeout = 60
         socket.setdefaulttimeout(timeout)
-        
+
         all_packages = []
         soup = self.rosetta_soup()
         aux = soup.find(name="td",
@@ -276,8 +277,8 @@ class Utils():
                         strings_needsreview)
 
                 pkg.is_gnome = self.is_gnome(pkg.name)
-                pkg.is_completed = pkg.untranslated_strings_count == 0
-                pkg.is_reviewed = pkg.needs_review_count == 0
+                pkg.is_completed = (pkg.untranslated_strings_count == 0)
+                pkg.is_reviewed = (pkg.needs_review_count == 0)
                 pkg.is_affected = self.is_affected(pkg.pkg_link)
 
                 all_packages.append(pkg)
@@ -300,18 +301,38 @@ class Utils():
 
         return all_packages
 
+    def calculate_stats(self):
+        gnome_packages = self.gnome_packages
+        #self.reviewed_packages = PackagesList("pacotes_revisados").packages
+        #self.affected_packages = PackagesList("pacotes_afetados").packages
+        all_packages = self.all_packages
+
+        total_strings = sum([string.total_strings_count for 
+            string in self.pending_list])
+        total_untranslated = sum([string.untranslated_strings_count for 
+            string in self.pending_list])
+        perc_untranslated = (total_untranslated * 100)/total_strings
+
+        self.total_strings = total_strings
+        self.total_untranslated = total_untranslated
+        self.perc_untranslated = perc_untranslated
+
+
+        estatisticas = ("attachment:Icones/idiomas.png '''Estatísticas: %d de"
+                " %d satrings para traduzir, apenas %.2f porcento.'''" %
+                (total_untranslated, total_strings, perc_untranslated))
+        estatisticas = ("%s[[BR]]\nRestam '''%d''' pacotes para serem"
+                " traduzidos.[[BR]][[BR]]" % (estatisticas, 
+                len(self.pending_list)))
+        print estatisticas
+
+
+
 root_link = "https://translations.launchpad.net"
 utils = Utils()
+import pdb
 
-## Adicionando as estatisticas:
-#porcentagem_untranslated = (total_untranslated * 100)/total_strings
-#estatisticas = "attachment:Icones/idiomas.png '''Estatísticas: %d de %d
-#strings para traduzir, apenas %.2f porcento.'''" %\
-#    (total_untranslated, total_strings, porcentagem_untranslated)
-#estatisticas = "%s[[BR]]\nRestam '''%d''' pacotes para serem
-#traduzidos.[[BR]][[BR]]" %\
-#    (estatisticas, pacotes_a_traduzir)
-
+utils.calculate_stats()
 # imprimir lista de pacotes para traduzir ainda
 wiki_list = [pkg for pkg in utils.all_packages if not (pkg.is_gnome or
         pkg.is_completed)]
