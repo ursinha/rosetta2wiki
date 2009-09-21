@@ -99,7 +99,8 @@ class GnomePackagesList(PackagesList):
         self.delete(self.tarfile_path)
         gnome_packages = []
         for item in packages:
-            package = item.split(".")[0].replace("-2.0", "")
+            package = item.split(".")[0].replace("-2.0", ""
+                    ).replace("-2.2", "")
             gnome_packages.append(package)
         return gnome_packages
 
@@ -197,7 +198,7 @@ class Utils():
         self.affected_packages = PackagesList("pacotes_afetados").packages
         self.all_packages = self.handle_rosetta_pages()
         self.pending_list = [pkg for pkg in self.all_packages
-                if not (pkg.is_gnome or pkg.is_completed)]
+                if not (pkg.is_gnome or pkg.is_completed or pkg.is_affected)]
 
     def is_gnome(self, package):
         return package in self.gnome_packages
@@ -232,7 +233,8 @@ class Utils():
 
         for i in range(1, numero_paginas + 2):
             # Tabela de pacotes
-            translations_table = soup.find(name="table", attrs={"id":"translationstatuses"})
+            translations_table = soup.find(name="table",
+                    attrs={"class":"listing sortable translation-stats"})
             # Linhas da tabela
             lines = translations_table.findAll(name="tr")
 
@@ -255,8 +257,11 @@ class Utils():
 
                 # 0 - nome pacote e link
                 aux = line[0].find(name='a')
+                if aux is None:
+                    continue
                 pkg_link = aux.attrs[0][1]
-                pacote = aux.contents[0].replace("-2.0", "")
+                pacote = aux.contents[0].replace("-2.0", ""
+                        ).replace("-2.2", "")
 
                 # 1 - numero total de strings do pacote
                 # De qualquer forma vou somar o numero total de strings
@@ -267,9 +272,6 @@ class Utils():
 
                 # 4 - numero de strings necessitando revisão (needs review):
                 strings_needsreview = float(line[4].find(name="span").contents[0])
-
-                if total_pkg_untranslated == 0 or self.is_affected(pkg_link):
-                    continue
 
                 pkg = Package(pacote.replace("-2.0", ""), pkg_link,
                         total_pkg_strings,
@@ -282,6 +284,7 @@ class Utils():
                 pkg.is_affected = self.is_affected(pkg.pkg_link)
 
                 all_packages.append(pkg)
+
 
             if (i == (numero_paginas + 1)):
                 break
@@ -296,7 +299,7 @@ class Utils():
                     print "Oops, we have a problem here!"
                     print "Error: %s" % e
                     print "Will sleep for a minute for it to settle."
-                    sleep(60)
+                    sleep(1)
                     print "Retrying... "
 
         return all_packages
@@ -308,7 +311,7 @@ class Utils():
         all_packages = self.all_packages
 
         total_strings = sum([string.total_strings_count for 
-            string in self.pending_list])
+            string in self.all_packages])
         total_untranslated = sum([string.untranslated_strings_count for 
             string in self.pending_list])
         perc_untranslated = (total_untranslated * 100)/total_strings
@@ -319,30 +322,34 @@ class Utils():
 
 
         estatisticas = ("attachment:Icones/idiomas.png '''Estatísticas: %d de"
-                " %d satrings para traduzir, apenas %.2f porcento.'''" %
+                " %d strings para traduzir, apenas %.2f porcento.'''" %
                 (total_untranslated, total_strings, perc_untranslated))
         estatisticas = ("%s[[BR]]\nRestam '''%d''' pacotes para serem"
                 " traduzidos.[[BR]][[BR]]" % (estatisticas, 
                 len(self.pending_list)))
         print estatisticas
 
+        print "Numero de pacotes gnome: " + str(len(gnome_packages))
+        print "Numero de pacotes: " + str(len(all_packages))
 
+
+    def generate_header(self):
+        pass
 
 root_link = "https://translations.launchpad.net"
 utils = Utils()
-import pdb
 
 utils.calculate_stats()
 # imprimir lista de pacotes para traduzir ainda
 wiki_list = [pkg for pkg in utils.all_packages if not (pkg.is_gnome or
-        pkg.is_completed)]
+        pkg.is_completed or pkg.is_affected)]
 for pkg in wiki_list:
     print pkg.format_to_wiki()
 
 print "\n\nGnome list:\n"
 # fazer lista de pacotes do gnome e remove-los da lista geral
 gnome_list = [pkg for pkg in utils.all_packages if (pkg.is_gnome and
-        not pkg.is_completed)]
+        not (pkg.is_completed or pkg.is_affected))]
 for pkg in gnome_list:
     print pkg.format_to_wiki()
 
