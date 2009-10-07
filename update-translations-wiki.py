@@ -24,12 +24,14 @@ from os import path, mkdir, listdir, unlink, rmdir
 from time import time, sleep
 from editmoin import editshortcut
 from BeautifulSoup import BeautifulSoup
+from sys import exit
 
-import pdb
 
-def setUp(self, file = "wiki.conf"):
+def setUp(file = "wiki.conf"):
     try:
-        self.parser = ConfigParser.read(file)
+        parser = ConfigParser()
+        parser.readfp(open(file))
+        return parser
     except IOError:
         print "Config file not found: %s" % file
         exit(1)
@@ -81,8 +83,11 @@ class GnomePackagesList(PackagesList):
             file = open(self.tarfile_path, 'wb')
             file.write(answer.read())
             file.close()
-        except:
-            pass
+        except Exception, e:
+            print "Error downloading file from %s: %s" % (self.download_link,
+                    e)
+            print "Will continue, without removing gnome packages."
+            raise e
 
     def extract(self):
         tar = tarfile.open(self.tarfile_path)
@@ -91,11 +96,16 @@ class GnomePackagesList(PackagesList):
         return self.dir_name
 
     def download_list(self, project="gnome"):
-        self.download_file()
+        try:
+            self.download_file()
+        except:
+            return []
         return listdir(self.extract())
 
     def get_list(self):
         packages = self.download_list()
+        if len(packages) == 0:
+            return packages
         self.delete(self.tarfile_path)
         gnome_packages = []
         for item in packages:
@@ -123,50 +133,68 @@ class GnomePackagesList(PackagesList):
 
 class Wiki():
 
-    def __init__(self, header, packages_list):
-        self.header = header
+    def __init__(self, packages_list, nick_ubuntu_version, stats):
+        self.stats = stats
+        self.header = configs.get("general", "header")
         self.packages = packages_list
+        self.nick_ubuntu_version = nick_ubuntu_version.lower()
+        self.translation_page_root = ("%s/ubuntu/%s/+lang/pt_BR/+index" % (
+                configs.get("general", "rosetta_root_link"),
+                self.nick_ubuntu_version))
+        self.wiki_link = "%s/TimeDeTraducao/%sPacotes" % (
+                configs.get("general", "wiki_root_link"),
+                nick_ubuntu_version.title())
+
 
     def publish_to_wiki(self):
-        pass
+        def editfunc(moinfile):
+            if "This page was opened for editing" in moinfile.data:
+                # Cancel the editing.
+                return 0
+            self.add_content_to_page(moinfile)
+            return 1
 
-    def editfunc(moinfile):
-        if "This page was opened for editing" in moinfile.data:
-            return 0
-        edit_page(moinfile, wiki_link)
-        return 1
+        if not editshortcut(self.wiki_link, editfile_func=editfunc):
+            # Some one else was editing the page. Raise an exception
+            raise Exception(
+                    "Couldn't get write lock for the wiki page. Aborting.")
 
-    def editfunc_needsreview(moinfile):
-        if "This page was opened for editing" in moinfile.data:
-            return 0
-        edit_page_needsreview(moinfile, wiki_link_needsreview)
-        return 1
+    def add_content_to_page(self, moinfile):
+        """Add the stats and packages to the wiki page."""
+        # The current body has come characters escaped.
+        stats = self.stats
+        new_packages = self.packages
+        lines = moinfile._unescape(moinfile.body).splitlines()
 
-    def editfunc_reviewed(moinfile):
-        if "This page was opened for editing" in moinfile.data:
-            return 0
-        edit_page_reviewed(moinfile, wiki_link_reviewed)
-        return 1
+        # Remove the old stats:
+        start_index = lines.index("##STATS_START") + 1
+        end_index = lines.index("##STATS_END")
+        for line in lines[start_index:end_index]:
+            lines.remove(line)
 
-    def edit_page(moinfile, link):
-        """Adiciona o conteudo alterado do wiki na pagina."""
-        moinfile.body = '\n'.join(wiki_lines)
+        # Add the new ones:
+        lines.insert(start_index, stats)
 
-    def edit_page_needsreview(moinfile, link):
-        """Adiciona o conteudo alterado do wiki na pagina."""
-        moinfile.body = '\n'.join(wiki_lines_needsreview)
+        # Remove the old packages:
+        start_pkg_index = lines.index("##LIST_START") + 1
+        new_page = lines[0:start_pkg_index]
 
-    def edit_page_reviewed(moinfile, link):
-        """Adiciona o conteudo alterado do wiki na pagina."""
-        moinfile.body = '\n'.join(wiki_lines_reviewed)
+        # Add the new ones:
+        new_page.extend(new_packages)
+
+        # Even though we unescaped the body before editing it, we don't need
+        # to escape it again now.
+        moinfile.body = '\n'.join(new_page)
+
 
 
 class Package():
 
     def __init__(self, name, pkg_link, total_strings_count, untranslated_count,
-            needs_review_count):
+            needs_review_count, rosetta_root_link):
         self.name = name
         self.pkg_link = pkg_link
+        self.root_link = rosetta_root_link
         self.total_strings_count = total_strings_count
         self.untranslated_strings_count = untranslated_count
         self.needs_review_count = needs_review_count
@@ -177,7 +205,7 @@ class Package():
 
     def format_to_wiki(self):
         wiki_line = ""
-        link = "%s%s" % (root_link, self.pkg_link)
+        link = "%s%s" % (self.root_link, self.pkg_link)
         if not self.is_completed:
             perc_untranslated = (self.untranslated_strings_count *
                     100)/self.total_strings_count
@@ -187,26 +215,30 @@ class Package():
         else:
             wiki_line = "|| [%s %s] || %d || [%s] || - ||" %\
                     (link, self.name, self.total_strings_count, link)
-        return wiki_line
+        return wiki_line.encode('UTF-8')
 
 
 class Utils():
 
-    def __init__(self):
+    def __init__(self, nick_ubuntu_version):
         self.gnome_packages = GnomePackagesList().packages
         self.reviewed_packages = PackagesList("pacotes_revisados").packages
         self.affected_packages = PackagesList("pacotes_afetados").packages
+        self.translation_page_root = ("%s/ubuntu/%s/+lang/pt_BR/+index" % (
+                configs.get("general", "rosetta_root_link"),
+                nick_ubuntu_version.lower()))
         self.all_packages = self.handle_rosetta_pages()
         self.pending_list = [pkg for pkg in self.all_packages
                 if not (pkg.is_gnome or pkg.is_completed or pkg.is_affected)]
+
 
     def is_gnome(self, package):
         return package in self.gnome_packages
 
     def rosetta_soup(self, start=0, batch=50):
-        translation_page_root = ("https://translations.edge.launchpad.net/"
-            "ubuntu/karmic/+lang/pt_BR/+index")
-        url = "%s?start=%d&batch=%d" % (translation_page_root, start, batch)
+        url = "%s?start=%d&batch=%d" % (
+                self.translation_page_root, start, batch)
+        print url
         urldata = urlopen(url)
         html = "".join(["%s" % line for line in urldata.readlines()])
         return BeautifulSoup(html)
@@ -219,8 +251,9 @@ class Utils():
         return link in self.affected_packages.keys()
 
     def handle_rosetta_pages(self):
-        batch_size = 50
-        timeout = 60
+        batch_size = int(configs.get("general", "batch_size"))
+        timeout = int(configs.get("general", "timeout"))
+        rosetta_root_link = configs.get("general", "rosetta_root_link")
         socket.setdefaulttimeout(timeout)
 
         all_packages = []
@@ -273,10 +306,11 @@ class Utils():
                 # 4 - numero de strings necessitando revisão (needs review):
                 strings_needsreview = float(line[4].find(name="span").contents[0])
 
-                pkg = Package(pacote.replace("-2.0", ""), pkg_link,
+                pkg = Package(pacote, pkg_link,
                         total_pkg_strings,
                         total_pkg_untranslated,
-                        strings_needsreview)
+                        strings_needsreview,
+                        rosetta_root_link)
 
                 pkg.is_gnome = self.is_gnome(pkg.name)
                 pkg.is_completed = (pkg.untranslated_strings_count == 0)
@@ -327,29 +361,31 @@ class Utils():
         estatisticas = ("%s[[BR]]\nRestam '''%d''' pacotes para serem"
                 " traduzidos.[[BR]][[BR]]" % (estatisticas, 
                 len(self.pending_list)))
-        print estatisticas
-
-        print "Numero de pacotes gnome: " + str(len(gnome_packages))
-        print "Numero de pacotes: " + str(len(all_packages))
+        return estatisticas
 
 
     def generate_header(self):
         pass
 
-root_link = "https://translations.launchpad.net"
-utils = Utils()
 
-utils.calculate_stats()
-# imprimir lista de pacotes para traduzir ainda
-wiki_list = [pkg for pkg in utils.all_packages if not (pkg.is_gnome or
-        pkg.is_completed or pkg.is_affected)]
-for pkg in wiki_list:
-    print pkg.format_to_wiki()
+def main():
+    global configs
+    configs = setUp()
 
-print "\n\nGnome list:\n"
-# fazer lista de pacotes do gnome e remove-los da lista geral
-gnome_list = [pkg for pkg in utils.all_packages if (pkg.is_gnome and
-        not (pkg.is_completed or pkg.is_affected))]
-for pkg in gnome_list:
-    print pkg.format_to_wiki()
+    nick_ubuntu_version = "karmic"
+    utils = Utils(nick_ubuntu_version)
+    stats = utils.calculate_stats()
 
+    # Generate the list of packages yet to be translated
+    wiki_list = [pkg.format_to_wiki() for pkg in utils.all_packages
+                if not (pkg.is_gnome or
+                    pkg.is_completed or
+                    pkg.is_affected)]
+
+    # Open wiki page
+    print wiki_list
+    wiki = Wiki(wiki_list, nick_ubuntu_version, stats)
+    wiki.publish_to_wiki()
+
+if __name__ == "__main__":
+    main()
