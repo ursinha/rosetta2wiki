@@ -68,3 +68,7 @@ indicator-messages /ubuntu/karmic/+source/indicator-messages/+pots/indicator-mes
 kdesudo /ubuntu/karmic/+source/kdesudo/+pots/kdesudo/pt_BR/+translate
 plasma-widget-indicatordisplay /ubuntu/karmic/+source/plasma-widget-indicatordisplay/+pots/plasma-applet-indicatordisplay/pt_BR/+translate
 ubiquity-slideshow-ubuntu-installing-software /ubuntu/karmic/+source/ubiquity-slideshow-ubuntu/+pots/ubiquity-slideshow-ubuntu-installing-software/pt_BR/+translate
+update-notifier /ubuntu/karmic/+source/update-notifier/+pots/update-notifier/pt_BR/+translate
+ibus /ubuntu/karmic/+source/ibus/+pots/ibus/pt_BR/+translate
+hardware /ubuntu/karmic/+source/xubuntu-docs/+pots/hardware/pt_BR/+translate
+usb-creator /ubuntu/karmic/+source/ubuntu-docs/+pots/usb-creator/pt_BR/+translate
