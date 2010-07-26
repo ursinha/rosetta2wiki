@@ -17,6 +17,8 @@
 import tarfile
 import dircache
 import socket
+import logging
+from optparse import OptionParser
 from ConfigParser import ConfigParser
 from sys import exit
 from urllib2 import urlopen
@@ -24,10 +26,12 @@ from os import path, mkdir, listdir, unlink, rmdir
 from time import time, sleep
 from editmoin import editshortcut
 from BeautifulSoup import BeautifulSoup
-from sys import exit
+from sys import argv, exit
 
+logger = logging.getLogger("update_translations_wiki")
+logging.basicConfig(level=logging.ERROR)
 
-def setUp(file = "wiki.conf"):
+def setUp(file = "/home/ursula/devel/personal/rosetta2wiki/devel/wiki.conf"):
     try:
         parser = ConfigParser()
         parser.readfp(open(file))
@@ -221,7 +225,9 @@ class Package():
 class Utils():
 
     def __init__(self, nick_ubuntu_version):
+        logger.debug("Fetching gnome packages..")
         self.gnome_packages = GnomePackagesList().packages
+        logger.debug("Done.")
         self.reviewed_packages = PackagesList("pacotes_revisados").packages
         self.affected_packages = PackagesList("pacotes_afetados").packages
         self.translation_page_root = ("%s/ubuntu/%s/+lang/pt_BR/+index" % (
@@ -238,7 +244,6 @@ class Utils():
     def rosetta_soup(self, start=0, batch=50):
         url = "%s?start=%d&batch=%d" % (
                 self.translation_page_root, start, batch)
-        print url
         urldata = urlopen(url)
         html = "".join(["%s" % line for line in urldata.readlines()])
         return BeautifulSoup(html)
@@ -251,6 +256,8 @@ class Utils():
         return link in self.affected_packages.keys()
 
     def handle_rosetta_pages(self):
+        logger.debug("The hardest part now: fetching info from launchpad. This"
+                " may take a while.. ")
         batch_size = int(configs.get("general", "batch_size"))
         timeout = int(configs.get("general", "timeout"))
         rosetta_root_link = configs.get("general", "rosetta_root_link")
@@ -264,12 +271,20 @@ class Utils():
         total_pacotes = int(aux.strip().split()[1])
         numero_paginas = total_pacotes / batch_size
 
+        logger.debug("Pages to process: %d" % numero_paginas)
+
         for i in range(1, numero_paginas + 2):
+            logger.debug("Processing page %d .. " % i)
             # Tabela de pacotes
             translations_table = soup.find(name="table",
                     attrs={"class":"listing sortable translation-stats"})
             # Linhas da tabela
-            lines = translations_table.findAll(name="tr")
+
+            try:
+                lines = translations_table.findAll(name="tr")
+            except Exception, e:
+                pdb.set_trace()
+                break
 
             # Por linha:
             # 0 - nome pacote e link
@@ -335,6 +350,7 @@ class Utils():
                     print "Will sleep for a minute for it to settle."
                     sleep(1)
                     print "Retrying... "
+            logger.debug("Done.")
 
         return all_packages
 
@@ -368,24 +384,54 @@ class Utils():
         pass
 
 
-def main():
+def main(argv):
     global configs
     configs = setUp()
 
-    nick_ubuntu_version = "karmic"
-    utils = Utils(nick_ubuntu_version)
-    stats = utils.calculate_stats()
+    description = ("This script updates the wiki page that contains the status"
+        " of the translations for a given Ubuntu series.")
+    usage = "usage: %prog -[vV]"
+    parser = OptionParser(description=description, usage=usage)
+    parser.add_option('-v', '--verbose', action='store_true',
+        dest='verbose', default=False)
+    parser.add_option('-V', '--very-verbose', action='store_true',
+        dest='very_verbose', default=False)
+    parser.add_option('-q', '--quiet', action='store_true',
+        dest='quiet', default=False)
 
-    # Generate the list of packages yet to be translated
-    wiki_list = [pkg.format_to_wiki() for pkg in utils.all_packages
-                if not (pkg.is_gnome or
-                    pkg.is_completed or
-                    pkg.is_affected)]
+    options, args = parser.parse_args(argv[1:])
 
-    # Open wiki page
-    print wiki_list
-    wiki = Wiki(wiki_list, nick_ubuntu_version, stats)
-    wiki.publish_to_wiki()
+    if options.very_verbose:
+        logger.setLevel(logging.DEBUG)
+    elif options.verbose:
+        logger.setLevel(logging.INFO)
+    elif options.quiet:
+        logger.setLevel(logging.CRITICAL)
+    else:
+        logger.setLevel(logging.ERROR)
+
+    nick_ubuntu_versions = ["lucid", "maverick"]
+    logger.debug("Ubuntu versions: %s" % ', '.join(nick_ubuntu_versions))
+
+    try:
+        for ubuntu_version in nick_ubuntu_versions:
+            logger.debug("Version: %s" % ubuntu_version)
+            utils = Utils(ubuntu_version)
+            stats = utils.calculate_stats()
+
+            # Generate the list of packages yet to be translated
+            wiki_list = [pkg.format_to_wiki() for pkg in utils.all_packages
+                        if not (pkg.is_gnome or
+                            pkg.is_completed or
+                            pkg.is_affected)]
+
+            # Open wiki page
+            wiki = Wiki(wiki_list, ubuntu_version, stats)
+            wiki.publish_to_wiki()
+    except Exception, e:
+        if e.errno == '503':
+            print "%s is not ready yet for translations." % ubuntu_version
+
 
 if __name__ == "__main__":
-    main()
+    main(argv)
