@@ -31,7 +31,7 @@ from sys import argv, exit
 logger = logging.getLogger("update_translations_wiki")
 logging.basicConfig(level=logging.ERROR)
 
-def setUp(file = "/home/ursula/devel/personal/rosetta2wiki/devel/wiki.conf"):
+def setUp(file = "/media/files/devel/Projects/rosetta2wiki/devel/wiki.conf"):
     try:
         parser = ConfigParser()
         parser.readfp(open(file))
@@ -221,6 +221,19 @@ class Package():
                     (link, self.name, self.total_strings_count, link)
         return wiki_line.encode('UTF-8')
 
+    def format_unreviewed_to_wiki(self):
+        wiki_line = ""
+        link = "%s%s" % (self.root_link, self.pkg_link)
+        wiki_line = ("|| [%s %s] || %d || [%s?show=new_suggestions %d] "
+                "|| - ||" % (link, self.name, self.total_strings_count,
+                link, self.needs_review_count))
+        return wiki_line.encode('UTF-8')
+
+
+    @property
+    def is_pending_review(self):
+        return (self.needs_review_count != 0)
+
 
 class Utils():
 
@@ -233,9 +246,17 @@ class Utils():
         self.translation_page_root = ("%s/ubuntu/%s/+lang/pt_BR/+index" % (
                 configs.get("general", "rosetta_root_link"),
                 nick_ubuntu_version.lower()))
-        self.all_packages = self.handle_rosetta_pages()
-        self.pending_list = [pkg for pkg in self.all_packages
-                if not (pkg.is_gnome or pkg.is_completed or pkg.is_affected)]
+        try:
+            self.all_packages = self.handle_rosetta_pages()
+            self.pending_list = [pkg for pkg in self.all_packages
+                    if not (pkg.is_gnome or pkg.is_completed or
+                        pkg.is_affected)]
+        except Exception:
+            raise
+
+    @property
+    def all_needs_review(self):
+        return [pkg for pkg in self.all_packages if pkg.is_pending_review]
 
 
     def is_gnome(self, package):
@@ -278,12 +299,17 @@ class Utils():
             # Tabela de pacotes
             translations_table = soup.find(name="table",
                     attrs={"class":"listing sortable translation-stats"})
-            # Linhas da tabela
+            if translations_table is None:
+                if "There are no programs to be translated" in soup:
+                    print "Acabaram as páginas!"
+                    continue
 
+            # Linhas da tabela
             try:
                 lines = translations_table.findAll(name="tr")
             except Exception, e:
-                pdb.set_trace()
+                print "Erro obtendo tabela de traducao: %s" % e
+                raise
                 break
 
             # Por linha:
@@ -398,6 +424,8 @@ def main(argv):
         dest='very_verbose', default=False)
     parser.add_option('-q', '--quiet', action='store_true',
         dest='quiet', default=False)
+    parser.add_option('--needs-review', action='store_true',
+        dest='needs_review', default=False)
 
     options, args = parser.parse_args(argv[1:])
 
@@ -410,27 +438,40 @@ def main(argv):
     else:
         logger.setLevel(logging.ERROR)
 
-    nick_ubuntu_versions = ["lucid", "maverick"]
+    nick_ubuntu_versions = ["maverick", "natty"]
     logger.debug("Ubuntu versions: %s" % ', '.join(nick_ubuntu_versions))
 
     try:
         for ubuntu_version in nick_ubuntu_versions:
             logger.debug("Version: %s" % ubuntu_version)
             utils = Utils(ubuntu_version)
-            stats = utils.calculate_stats()
 
-            # Generate the list of packages yet to be translated
-            wiki_list = [pkg.format_to_wiki() for pkg in utils.all_packages
-                        if not (pkg.is_gnome or
-                            pkg.is_completed or
-                            pkg.is_affected)]
+            if options.needs_review:
+                for pkg in utils.all_needs_review:
+                    print pkg.format_unreviewed_to_wiki()
+            else:
+                stats = utils.calculate_stats()
 
-            # Open wiki page
-            wiki = Wiki(wiki_list, ubuntu_version, stats)
-            wiki.publish_to_wiki()
-    except Exception, e:
+                # Generate the list of packages yet to be translated
+                wiki_list = [pkg.format_to_wiki() for pkg in utils.all_packages
+                            if not (pkg.is_gnome or
+                                pkg.is_completed or
+                                pkg.is_affected)]
+
+                # Open wiki page
+                wiki = Wiki(wiki_list, ubuntu_version, stats)
+                wiki.publish_to_wiki()
+    except NameError, e:
+        print e
+    except AttributeError, e:
+        print e
+    except ValueError, e:
+        print e
+    except HTTPError, e:
         if e.errno == '503':
             print "%s is not ready yet for translations." % ubuntu_version
+    except Exception, e:
+        print e
 
 
 if __name__ == "__main__":
