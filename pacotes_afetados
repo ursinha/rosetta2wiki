@@ -72,3 +72,5 @@ update-notifier /ubuntu/karmic/+source/update-notifier/+pots/update-notifier/pt_
 ibus /ubuntu/karmic/+source/ibus/+pots/ibus/pt_BR/+translate
 hardware /ubuntu/karmic/+source/xubuntu-docs/+pots/hardware/pt_BR/+translate
 usb-creator /ubuntu/karmic/+source/ubuntu-docs/+pots/usb-creator/pt_BR/+translate
+oktet /ubuntu/maverick/+source/kdeutils/+pots/okteta/pt_BR/+translate
+kaffeine /ubuntu/maverick/+source/kaffeine/+pots/kaffeine/pt_BR/+translate
