@@ -1,0 +1,23 @@
+== Rosetta2Wiki ==
+
+=== Set up wiki privileges === 
+
+To setup privileges to change the wiki, considering that you're using 
+MoinMoin, you should create a file in your home folder, ~/.moin_ids, and it
+should look like this:
+
+{{{
+http://moinmo.in 987654321.321.54321 
+http://wiki.canonical.com
+http://example.com/moin/moin.cgi 123456789.123.12345
+}}}
+
+If the server needs Basic HTTP Authentication you can use something like:
+
+{{{
+https://username:password@example.com/moin/moin.cgi 123456789.123.12345
+}}}
+
+This should be enough to be able to write changes to the Ubuntu wiki.
+
+(From http://niemeyer.net/editmoin#head-0a5434b85feb1fb0cfc86c13d3ae6a7142076941)
