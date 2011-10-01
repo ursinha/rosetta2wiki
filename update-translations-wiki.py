@@ -31,7 +31,7 @@ from sys import argv, exit
 logger = logging.getLogger("update_translations_wiki")
 logging.basicConfig(level=logging.ERROR)
 
-def setUp(file = "/media/files/devel/Projects/rosetta2wiki/devel/wiki.conf"):
+def setUp(file = "/media/files/Projects/rosetta2wiki/devel/wiki.conf"):
     try:
         parser = ConfigParser()
         parser.readfp(open(file))
@@ -137,17 +137,17 @@ class GnomePackagesList(PackagesList):
 
 class Wiki():
 
-    def __init__(self, packages_list, nick_ubuntu_version, stats):
+    def __init__(self, packages_list, ubuntu_series, stats):
         self.stats = stats
         self.header = configs.get("general", "header")
         self.packages = packages_list
-        self.nick_ubuntu_version = nick_ubuntu_version.lower()
+        self.ubuntu_series = ubuntu_series.lower()
         self.translation_page_root = ("%s/ubuntu/%s/+lang/pt_BR/+index" % (
                 configs.get("general", "rosetta_root_link"),
-                self.nick_ubuntu_version))
+                self.ubuntu_series))
         self.wiki_link = "%s/TimeDeTraducao/%sPacotes" % (
                 configs.get("general", "wiki_root_link"),
-                nick_ubuntu_version.title())
+                ubuntu_series.title())
 
 
     def publish_to_wiki(self):
@@ -213,18 +213,18 @@ class Package():
         if not self.is_completed:
             perc_untranslated = (self.untranslated_strings_count *
                     100)/self.total_strings_count
-            wiki_line = "|| [%s %s] || %d || [%s?show=untranslated %d] || %.2f ||" %\
+            wiki_line = "|| [[%s | %s]] || %d || [[%s?show=untranslated | %d]] || %.2f ||" %\
                     (link, self.name, self.total_strings_count, link,
                     self.untranslated_strings_count, perc_untranslated)
         else:
-            wiki_line = "|| [%s %s] || %d || [%s] || - ||" %\
+            wiki_line = "|| [[%s | %s]] || %d || [[%s]] || - ||" %\
                     (link, self.name, self.total_strings_count, link)
         return wiki_line.encode('UTF-8')
 
     def format_unreviewed_to_wiki(self):
         wiki_line = ""
         link = "%s%s" % (self.root_link, self.pkg_link)
-        wiki_line = ("|| [%s %s] || %d || [%s?show=new_suggestions %d] "
+        wiki_line = ("|| [[%s | %s]] || %d || [[%s?show=new_suggestions | %d]] "
                 "|| - ||" % (link, self.name, self.total_strings_count,
                 link, self.needs_review_count))
         return wiki_line.encode('UTF-8')
@@ -397,11 +397,11 @@ class Utils():
         self.perc_untranslated = perc_untranslated
 
 
-        estatisticas = ("attachment:Icones/idiomas.png '''Estatísticas: %d de"
+        estatisticas = ("{{attachment:Icones/idiomas.png}} '''Estatísticas: %d de"
                 " %d strings para traduzir, apenas %.2f porcento.'''" %
                 (total_untranslated, total_strings, perc_untranslated))
-        estatisticas = ("%s[[BR]]\nRestam '''%d''' pacotes para serem"
-                " traduzidos.[[BR]][[BR]]" % (estatisticas, 
+        estatisticas = ("%s<<BR>>\nRestam '''%d''' pacotes para serem"
+                " traduzidos.<<BR>><<BR>>" % (estatisticas, 
                 len(self.pending_list)))
         return estatisticas
 
@@ -420,6 +420,8 @@ def main(argv):
     parser = OptionParser(description=description, usage=usage)
     parser.add_option('-v', '--verbose', action='store_true',
         dest='verbose', default=False)
+    parser.add_option('-S', '--series', type='string',
+        dest='ubuntu_series')
     parser.add_option('-V', '--very-verbose', action='store_true',
         dest='very_verbose', default=False)
     parser.add_option('-q', '--quiet', action='store_true',
@@ -428,6 +430,21 @@ def main(argv):
         dest='needs_review', default=False)
 
     options, args = parser.parse_args(argv[1:])
+    nick_ubuntu_versions = ["lucid", "maverick", "natty", "oneiric"]
+
+    if options.ubuntu_series:
+        ubuntu_serieses = options.ubuntu_series.split(",")
+        for serie in ubuntu_serieses:
+            if serie.strip() in nick_ubuntu_versions:
+                continue
+            else:
+                logger.critical("%s not valid. Valid Ubuntu series are: %s." %
+                    (serie, ", ".join(nick_ubuntu_versions)))
+                exit(1)
+    else:
+        logger.critical("Ubuntu series required. Valid Ubuntu series are: %s." %
+            ", ".join(nick_ubuntu_versions))
+        exit(1)
 
     if options.very_verbose:
         logger.setLevel(logging.DEBUG)
@@ -438,11 +455,10 @@ def main(argv):
     else:
         logger.setLevel(logging.ERROR)
 
-    nick_ubuntu_versions = ["maverick", "natty"]
-    logger.debug("Ubuntu versions: %s" % ', '.join(nick_ubuntu_versions))
+    logger.debug("Ubuntu versions: %s" % ', '.join(ubuntu_serieses))
 
     try:
-        for ubuntu_version in nick_ubuntu_versions:
+        for ubuntu_version in ubuntu_serieses:
             logger.debug("Version: %s" % ubuntu_version)
             utils = Utils(ubuntu_version)
 
@@ -467,11 +483,12 @@ def main(argv):
         print e
     except ValueError, e:
         print e
-    except HTTPError, e:
-        if e.errno == '503':
-            print "%s is not ready yet for translations." % ubuntu_version
     except Exception, e:
-        print e
+        try:
+            if e.errno == '503':
+                print "%s is not ready yet for translations." % ubuntu_version
+        except:
+            print e
 
 
 if __name__ == "__main__":
