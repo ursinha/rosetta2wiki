@@ -294,6 +294,13 @@ def get_urlopener(moinurl, id=None):
         urlopener.addheader("Cookie", "MOIN_ID=\"%s\"" % id)
         # moinmoin >= 1.6
         urlopener.addheader("Cookie", "MOIN_SESSION=\"%s\"" % id)
+        # moinmoin < 1.9.2 (Patch from loic)
+        if moinurl.startswith("https://"):
+            urlopener.addheader("Cookie",
+                "MOIN_SESSION_443_ROOT=%s" % id)
+        elif moinurl.startswith("http://"):
+            urlopener.addheader("Cookie",
+                "MOIN_SESSION_80_ROOT=%s" % id)
     return urlopener
 
 def fetchfile(urlopener, url, id, template):
