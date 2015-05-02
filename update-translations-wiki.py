@@ -20,18 +20,18 @@ import socket
 import logging
 from optparse import OptionParser
 from ConfigParser import ConfigParser
-from sys import exit
+from sys import argv, exit
 from urllib2 import urlopen
 from os import path, mkdir, listdir, unlink, rmdir
 from time import time, sleep
 from editmoin import editshortcut
 from BeautifulSoup import BeautifulSoup
-from sys import argv, exit
 
 logger = logging.getLogger("update_translations_wiki")
 logging.basicConfig(level=logging.ERROR)
 
-def setUp(file = "/media/files/Projects/rosetta2wiki/devel/wiki.conf"):
+
+def setUp(file="/media/files/Projects/rosetta2wiki/devel/wiki.conf"):
     try:
         parser = ConfigParser()
         parser.readfp(open(file))
@@ -43,7 +43,7 @@ def setUp(file = "/media/files/Projects/rosetta2wiki/devel/wiki.conf"):
 
 class PackagesList():
 
-    def __init__(self, file = ""):
+    def __init__(self, file=""):
         self.packages = self.get_list(file)
 
     def get_list(self, file):
@@ -64,7 +64,8 @@ class GnomePackagesList(PackagesList):
     def __init__(self, project="gnome"):
         self.project = project
         # XXX: pegar do arquivo de configuração também
-        self.download_link = "http://l10n.gnome.org/languages/pt_BR/gnome-2-28/ui.tar.gz"
+        self.download_link = (
+            "http://l10n.gnome.org/languages/pt_BR/gnome-2-28/ui.tar.gz")
         self.dir_name = ""
         self.tarfile_name = ""
         self.set_env()
@@ -88,8 +89,8 @@ class GnomePackagesList(PackagesList):
             file.write(answer.read())
             file.close()
         except Exception, e:
-            print "Error downloading file from %s: %s" % (self.download_link,
-                    e)
+            print "Error downloading file from %s: %s" % (
+                self.download_link, e)
             print "Will continue, without removing gnome packages."
             raise e
 
@@ -113,8 +114,8 @@ class GnomePackagesList(PackagesList):
         self.delete(self.tarfile_path)
         gnome_packages = []
         for item in packages:
-            package = item.split(".")[0].replace("-2.0", ""
-                    ).replace("-2.2", "")
+            package = item.split(".")[0].replace(
+                "-2.0", "").replace("-2.2", "")
             gnome_packages.append(package)
         return gnome_packages
 
@@ -123,10 +124,11 @@ class GnomePackagesList(PackagesList):
         for file in files:
             path_ = path.join(dirname, file)
             if path.isdir(path_):
-                recursive_delete(path_)
+                self.recursive_delete(path_)
             else:
                 retval = self.delete(path_)
         rmdir(dirname)
+        return retval
 
     def delete(self, filename):
         unlink(filename)
@@ -142,13 +144,13 @@ class Wiki():
         self.header = configs.get("general", "header")
         self.packages = packages_list
         self.ubuntu_series = ubuntu_series.lower()
-        self.translation_page_root = ("%s/ubuntu/%s/+lang/pt_BR/+index" % (
+        self.translation_page_root = (
+            "%s/ubuntu/%s/+lang/pt_BR/+index" % (
                 configs.get("general", "rosetta_root_link"),
                 self.ubuntu_series))
-        self.wiki_link = "%s/TimeDeTraducao/%sPacotes" % (
-                configs.get("general", "wiki_root_link"),
-                ubuntu_series.title())
-
+        self.wiki_link = (
+            "%s/TimeDeTraducao/%sPacotes" % (configs.get(
+                "general", "wiki_root_link"), ubuntu_series.title()))
 
     def publish_to_wiki(self):
         def editfunc(moinfile):
@@ -161,7 +163,7 @@ class Wiki():
         if not editshortcut(self.wiki_link, editfile_func=editfunc):
             # Some one else was editing the page. Raise an exception
             raise Exception(
-                    "Couldn't get write lock for the wiki page. Aborting.")
+                "Couldn't get write lock for the wiki page. Aborting.")
 
     def add_content_to_page(self, moinfile):
         """Add the stats and packages to the wiki page."""
@@ -191,10 +193,10 @@ class Wiki():
         moinfile.body = '\n'.join(new_page)
 
 
-
 class Package():
 
-    def __init__(self, name, pkg_link, total_strings_count, untranslated_count,
+    def __init__(
+            self, name, pkg_link, total_strings_count, untranslated_count,
             needs_review_count, rosetta_root_link):
         self.name = name
         self.pkg_link = pkg_link
@@ -211,24 +213,27 @@ class Package():
         wiki_line = ""
         link = "%s%s" % (self.root_link, self.pkg_link)
         if not self.is_completed:
-            perc_untranslated = (self.untranslated_strings_count *
-                    100)/self.total_strings_count
-            wiki_line = "|| [[%s | %s]] || %d || [[%s?show=untranslated | %d]] || %.2f ||" %\
-                    (link, self.name, self.total_strings_count, link,
-                    self.untranslated_strings_count, perc_untranslated)
+            perc_untranslated = (
+                self.untranslated_strings_count * 100)/self.total_strings_count
+            wiki_line = (
+                "|| [[%s | %s]] || %d || [[%s?show=untranslated | %d]] ||"
+                "%.2f ||") % (link, self.name, self.total_strings_count, link,
+                              self.untranslated_strings_count,
+                              perc_untranslated)
         else:
-            wiki_line = "|| [[%s | %s]] || %d || [[%s]] || - ||" %\
-                    (link, self.name, self.total_strings_count, link)
+            wiki_line = (
+                "|| [[%s | %s]] || %d || [[%s]] || - ||" % (
+                    link, self.name, self.total_strings_count, link))
         return wiki_line.encode('UTF-8')
 
     def format_unreviewed_to_wiki(self):
         wiki_line = ""
         link = "%s%s" % (self.root_link, self.pkg_link)
-        wiki_line = ("|| [[%s | %s]] || %d || [[%s?show=new_suggestions | %d]] "
-                "|| - ||" % (link, self.name, self.total_strings_count,
-                link, self.needs_review_count))
+        wiki_line = (
+            "|| [[%s | %s]] || %d || [[%s?show=new_suggestions | %d]] "
+            "|| - ||" % (link, self.name, self.total_strings_count,
+                         link, self.needs_review_count))
         return wiki_line.encode('UTF-8')
-
 
     @property
     def is_pending_review(self):
@@ -243,14 +248,15 @@ class Utils():
         logger.debug("Done.")
         self.reviewed_packages = PackagesList("pacotes_revisados").packages
         self.affected_packages = PackagesList("pacotes_afetados").packages
-        self.translation_page_root = ("%s/ubuntu/%s/+lang/pt_BR/+index" % (
+        self.translation_page_root = (
+            "%s/ubuntu/%s/+lang/pt_BR/+index" % (
                 configs.get("general", "rosetta_root_link"),
                 nick_ubuntu_version.lower()))
         try:
             self.all_packages = self.handle_rosetta_pages()
-            self.pending_list = [pkg for pkg in self.all_packages
-                    if not (pkg.is_gnome or pkg.is_completed or
-                        pkg.is_affected)]
+            self.pending_list = [
+                pkg for pkg in self.all_packages if not (
+                    pkg.is_gnome or pkg.is_completed or pkg.is_affected)]
         except Exception:
             raise
 
@@ -258,13 +264,12 @@ class Utils():
     def all_needs_review(self):
         return [pkg for pkg in self.all_packages if pkg.is_pending_review]
 
-
     def is_gnome(self, package):
         return package in self.gnome_packages
 
     def rosetta_soup(self, start=0, batch=50):
         url = "%s?start=%d&batch=%d" % (
-                self.translation_page_root, start, batch)
+            self.translation_page_root, start, batch)
         urldata = urlopen(url)
         html = "".join(["%s" % line for line in urldata.readlines()])
         return BeautifulSoup(html)
@@ -277,8 +282,9 @@ class Utils():
         return link in self.affected_packages.keys()
 
     def handle_rosetta_pages(self):
-        logger.debug("The hardest part now: fetching info from launchpad. This"
-                " may take a while.. ")
+        logger.debug(
+            "The hardest part now: fetching info from launchpad. This"
+            " may take a while.. ")
         batch_size = int(configs.get("general", "batch_size"))
         timeout = int(configs.get("general", "timeout"))
         rosetta_root_link = configs.get("general", "rosetta_root_link")
@@ -286,8 +292,8 @@ class Utils():
 
         all_packages = []
         soup = self.rosetta_soup()
-        aux = soup.find(name="td",
-            attrs={"class":"batch-navigation-index"}).contents[4]
+        aux = soup.find(
+            name="td", attrs={"class": "batch-navigation-index"}).contents[4]
 
         total_pacotes = int(aux.strip().split()[1])
         numero_paginas = total_pacotes / batch_size
@@ -297,8 +303,9 @@ class Utils():
         for i in range(1, numero_paginas + 2):
             logger.debug("Processing page %d .. " % i)
             # Tabela de pacotes
-            translations_table = soup.find(name="table",
-                    attrs={"class":"listing sortable translation-stats"})
+            translations_table = soup.find(
+                name="table",
+                attrs={"class": "listing sortable translation-stats"})
             if translations_table is None:
                 if "There are no programs to be translated" in soup:
                     print "Acabaram as páginas!"
@@ -334,24 +341,28 @@ class Utils():
                 if aux is None:
                     continue
                 pkg_link = aux.attrs[0][1]
-                pacote = aux.contents[0].replace("-2.0", ""
-                        ).replace("-2.2", "")
+                pacote = aux.contents[0].replace(
+                    "-2.0", "").replace("-2.2", "")
 
                 # 1 - numero total de strings do pacote
                 # De qualquer forma vou somar o numero total de strings
                 total_pkg_strings = float(line[1].contents[0])
 
                 # 3 - numero de strings untranslated
-                total_pkg_untranslated = float(line[3].find(name="span").contents[0])
+                total_pkg_untranslated = float(
+                    line[3].find(name="span").contents[0])
 
                 # 4 - numero de strings necessitando revisão (needs review):
-                strings_needsreview = float(line[4].find(name="span").contents[0])
+                strings_needsreview = float(
+                    line[4].find(name="span").contents[0])
 
-                pkg = Package(pacote, pkg_link,
-                        total_pkg_strings,
-                        total_pkg_untranslated,
-                        strings_needsreview,
-                        rosetta_root_link)
+                pkg = Package(
+                    pacote,
+                    pkg_link,
+                    total_pkg_strings,
+                    total_pkg_untranslated,
+                    strings_needsreview,
+                    rosetta_root_link)
 
                 pkg.is_gnome = self.is_gnome(pkg.name)
                 pkg.is_completed = (pkg.untranslated_strings_count == 0)
@@ -359,7 +370,6 @@ class Utils():
                 pkg.is_affected = self.is_affected(pkg.pkg_link)
 
                 all_packages.append(pkg)
-
 
             if (i == (numero_paginas + 1)):
                 break
@@ -382,29 +392,30 @@ class Utils():
 
     def calculate_stats(self):
         gnome_packages = self.gnome_packages
-        #self.reviewed_packages = PackagesList("pacotes_revisados").packages
-        #self.affected_packages = PackagesList("pacotes_afetados").packages
+        # self.reviewed_packages = PackagesList("pacotes_revisados").packages
+        # self.affected_packages = PackagesList("pacotes_afetados").packages
         all_packages = self.all_packages
 
-        total_strings = sum([string.total_strings_count for 
-            string in self.all_packages])
-        total_untranslated = sum([string.untranslated_strings_count for 
-            string in self.pending_list])
+        total_strings = sum(
+            [string.total_strings_count for string in self.all_packages])
+        total_untranslated = sum(
+            [string.untranslated_strings_count for string in self.pending_list]
+            )
         perc_untranslated = (total_untranslated * 100)/total_strings
 
         self.total_strings = total_strings
         self.total_untranslated = total_untranslated
         self.perc_untranslated = perc_untranslated
 
-
-        estatisticas = ("{{attachment:Icones/idiomas.png}} '''Estatísticas: %d de"
-                " %d strings para traduzir, apenas %.2f porcento.'''" %
-                (total_untranslated, total_strings, perc_untranslated))
-        estatisticas = ("%s<<BR>>\nRestam '''%d''' pacotes para serem"
-                " traduzidos.<<BR>><<BR>>" % (estatisticas, 
-                len(self.pending_list)))
+        estatisticas = (
+            "{{attachment:Icones/idiomas.png}} '''Estatísticas: %d de"
+            " %d strings para traduzir, apenas %.2f porcento.'''" %
+            (total_untranslated, total_strings, perc_untranslated))
+        estatisticas = (
+            "%s<<BR>>\nRestam '''%d''' pacotes para serem"
+            " traduzidos.<<BR>><<BR>>" % (
+                estatisticas, len(self.pending_list)))
         return estatisticas
-
 
     def generate_header(self):
         pass
@@ -414,20 +425,23 @@ def main(argv):
     global configs
     configs = setUp()
 
-    description = ("This script updates the wiki page that contains the status"
+    description = (
+        "This script updates the wiki page that contains the status"
         " of the translations for a given Ubuntu series.")
     usage = "usage: %prog -[vV]"
     parser = OptionParser(description=description, usage=usage)
-    parser.add_option('-v', '--verbose', action='store_true',
-        dest='verbose', default=False)
-    parser.add_option('-S', '--series', type='string',
-        dest='ubuntu_series')
-    parser.add_option('-V', '--very-verbose', action='store_true',
-        dest='very_verbose', default=False)
-    parser.add_option('-q', '--quiet', action='store_true',
-        dest='quiet', default=False)
-    parser.add_option('--needs-review', action='store_true',
-        dest='needs_review', default=False)
+    parser.add_option(
+        '-v', '--verbose', action='store_true', dest='verbose', default=False)
+    parser.add_option(
+        '-S', '--series', type='string', dest='ubuntu_series')
+    parser.add_option(
+        '-V', '--very-verbose', action='store_true', dest='very_verbose',
+        default=False)
+    parser.add_option(
+        '-q', '--quiet', action='store_true', dest='quiet', default=False)
+    parser.add_option(
+        '--needs-review', action='store_true', dest='needs_review',
+        default=False)
 
     options, args = parser.parse_args(argv[1:])
     nick_ubuntu_versions = ["lucid", "maverick", "natty", "oneiric"]
@@ -438,11 +452,13 @@ def main(argv):
             if serie.strip() in nick_ubuntu_versions:
                 continue
             else:
-                logger.critical("%s not valid. Valid Ubuntu series are: %s." %
-                    (serie, ", ".join(nick_ubuntu_versions)))
+                logger.critical(
+                    "%s not valid. Valid Ubuntu series are: %s." % (
+                        serie, ", ".join(nick_ubuntu_versions)))
                 exit(1)
     else:
-        logger.critical("Ubuntu series required. Valid Ubuntu series are: %s." %
+        logger.critical(
+            "Ubuntu series required. Valid Ubuntu series are: %s." %
             ", ".join(nick_ubuntu_versions))
         exit(1)
 
@@ -469,10 +485,9 @@ def main(argv):
                 stats = utils.calculate_stats()
 
                 # Generate the list of packages yet to be translated
-                wiki_list = [pkg.format_to_wiki() for pkg in utils.all_packages
-                            if not (pkg.is_gnome or
-                                pkg.is_completed or
-                                pkg.is_affected)]
+                wiki_list = [
+                    pkg.format_to_wiki() for pkg in utils.all_packages if not (
+                        pkg.is_gnome or pkg.is_completed or pkg.is_affected)]
 
                 # Open wiki page
                 wiki = Wiki(wiki_list, ubuntu_version, stats)
